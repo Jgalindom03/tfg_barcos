@@ -1,0 +1,21 @@
+=== Evaluación en Datos Aumentados (ruido=0.05) ===
+Loss: 1.3863 | Accuracy: 25.00%
+
+Reporte de clasificación:
+              precision    recall  f1-score   support
+
+           0       0.25      1.00      0.40       700
+           1       0.00      0.00      0.00       700
+           2       0.00      0.00      0.00       700
+           3       0.00      0.00      0.00       700
+
+    accuracy                           0.25      2800
+   macro avg       0.06      0.25      0.10      2800
+weighted avg       0.06      0.25      0.10      2800
+
+Matriz de confusión:
+[[700   0   0   0]
+ [700   0   0   0]
+ [700   0   0   0]
+ [700   0   0   0]]
+Balanced Accuracy: 0.25
