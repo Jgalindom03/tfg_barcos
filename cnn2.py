@@ -1,202 +1,112 @@
 import os
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers
+layers = tf.keras.layers
 
-from sklearn.model_selection import KFold, train_test_split
-from sklearn.metrics import (
-    classification_report,
-    confusion_matrix,
-    balanced_accuracy_score,
-    accuracy_score
-)
-from sklearn.ensemble import RandomForestClassifier
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import KFold
+from sklearn.metrics import classification_report, confusion_matrix, balanced_accuracy_score
 
 # =====================================================
-# 1. Lectura de datos (4 CSV) + troceado en ventanas
+# 1. Lectura de datos con padding para columnas variables
 # =====================================================
-def load_data_aplanado():
+def load_data(base_dir="severidad_alta/resultados"):
     """
-    Lee 4 CSV (align parallel 1..4), cada uno con un grado de severidad distinto.
-    Se asume que cada CSV tiene N filas x 1800 columnas (300*6) en forma 'aplanada'.
-    Cada fila es una muestra.
+    Lee todas las subcarpetas dentro de 'base_dir'.
+    - En cada subcarpeta busca el archivo 'matriz_3D_aplanada.csv'.
+    - No se descartan CSV con diferente número de columnas; en lugar de eso,
+      se hace padding hasta el máximo número de columnas encontrado.
+
+    Pasos:
+      1. Recorremos todas las subcarpetas y guardamos en memoria (arr, labels).
+      2. Determinamos max_cols = mayor número de columnas entre todas.
+      3. Rellenamos con ceros a la derecha para que todas tengan shape (N, max_cols).
+      4. Concatenamos en un único X e Y.
+      5. Hacemos normalización min–max (opcional).
+
+    Retorna
+    -------
+    X : np.ndarray, shape (N_total, max_cols)
+    y : np.ndarray, shape (N_total,)
     """
-    path_1 = os.path.join("resultados", "align parallel 1", "matriz_3D_aplanada.csv")
-    path_2 = os.path.join("resultados", "align parallel 2", "matriz_3D_aplanada.csv")
-    path_3 = os.path.join("resultados", "align parallel 3", "matriz_3D_aplanada.csv")
-    path_4 = os.path.join("resultados", "align parallel 4", "matriz_3D_aplanada.csv")
+    subcarpetas = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
 
+    data_list = []
+    label_list = []
+    current_label = 0
+    max_cols = 0
 
-    df1 = pd.read_csv(path_1, header=0)
-    df2 = pd.read_csv(path_2, header=0)
-    df3 = pd.read_csv(path_3, header=0)
-    df4 = pd.read_csv(path_4, header=0)
+    # 1. Recorremos subcarpetas y cargamos
+    for carpeta in subcarpetas:
+        csv_path = os.path.join(base_dir, carpeta, "matriz_3D_aplanada.csv")
+        if not os.path.isfile(csv_path):
+            print(f"[Aviso] No se encontró {csv_path}. Se omite la carpeta '{carpeta}'.")
+            continue
 
-    X_data_1 = df1.values  # (N1, 1800)
-    X_data_2 = df2.values
-    X_data_3 = df3.values
-    X_data_4 = df4.values
+        print(f"Leyendo: {csv_path} (Etiqueta = {current_label})")
+        df = pd.read_csv(csv_path, header=0)
+        arr = df.values  # (N, M_i)
 
-    y_data_1 = np.full((X_data_1.shape[0],), 0, dtype=int)
-    y_data_2 = np.full((X_data_2.shape[0],), 1, dtype=int)
-    y_data_3 = np.full((X_data_3.shape[0],), 2, dtype=int)
-    y_data_4 = np.full((X_data_4.shape[0],), 3, dtype=int)
+        data_list.append(arr)
+        label_list.append(np.full((arr.shape[0],), current_label, dtype=int))
 
-    X_apl = np.concatenate([X_data_1, X_data_2, X_data_3, X_data_4], axis=0)
-    y = np.concatenate([y_data_1, y_data_2, y_data_3, y_data_4], axis=0)
+        # Actualizamos el máximo número de columnas
+        if arr.shape[1] > max_cols:
+            max_cols = arr.shape[1]
 
-    print("Forma de X_apl (aplanado):", X_apl.shape)
-    print("Forma de y:", y.shape)
+        current_label += 1
 
-    return X_apl, y
+    if not data_list:
+        raise ValueError(f"No se encontraron CSV válidos en '{base_dir}'.")
 
-def load_data_ventanas():
-    """
-    Lee 4 CSV (cada uno con 210000 filas y 6 columnas) y trocea en ventanas de 300.
-    Esto es el caso cuando cada CSV = (210000,6).
-    Se obtienen (700,300,6) por CSV.
-    """
-    path_1 = os.path.join("resultados", "align parallel 1", "matriz_3D_aplanada.csv")
-    path_2 = os.path.join("resultados", "align parallel 2", "matriz_3D_aplanada.csv")
-    path_3 = os.path.join("resultados", "align parallel 3", "matriz_3D_aplanada.csv")
-    path_4 = os.path.join("resultados", "align parallel 4", "matriz_3D_aplanada.csv")
+    # 2. Rellenamos cada arr con ceros hasta max_cols
+    X_list = []
+    y_list = []
+    for arr, labels in zip(data_list, label_list):
+        N, M_i = arr.shape
+        arr_padded = np.zeros((N, max_cols), dtype=arr.dtype)
+        arr_padded[:, :M_i] = arr  # copiamos datos, y el resto queda en ceros
+        X_list.append(arr_padded)
+        y_list.append(labels)
 
+    # 3. Concatenamos
+    X = np.concatenate(X_list, axis=0)  # (N_total, max_cols)
+    y = np.concatenate(y_list, axis=0)  # (N_total,)
 
-    df1 = pd.read_csv(path_1, header=0)
-    df2 = pd.read_csv(path_2, header=0)
-    df3 = pd.read_csv(path_3, header=0)
-    df4 = pd.read_csv(path_4, header=0)
+    print("Shape final de X:", X.shape)
+    print("Shape final de y:", y.shape)
 
-    # asumiendo que cada df = (210000,6)
-    arr1 = df1.values
-    arr2 = df2.values
-    arr3 = df3.values
-    arr4 = df4.values
+    # 4. Normalización min–max (opcional)
+    X_min = X.min(axis=0, keepdims=True)  # (1, max_cols)
+    X_max = X.max(axis=0, keepdims=True)  # (1, max_cols)
+    eps = 1e-8
+    X = (X - X_min) / (X_max - X_min + eps)
 
-    # troceamos en (700,300,6)
-    def reshape_ventanas(arr, label):
-        n_total = (arr.shape[0] // 300) * 300
-        arr = arr[:n_total]  # descartar filas sobrantes
-        num_samples = n_total // 300
-        X_data = arr.reshape(num_samples, 300, 6)
-        y_data = np.full((num_samples,), label, dtype=int)
-        return X_data, y_data
-
-    X_data_1, y_data_1 = reshape_ventanas(arr1, 0)
-    X_data_2, y_data_2 = reshape_ventanas(arr2, 1)
-    X_data_3, y_data_3 = reshape_ventanas(arr3, 2)
-    X_data_4, y_data_4 = reshape_ventanas(arr4, 3)
-
-    X = np.concatenate([X_data_1, X_data_2, X_data_3, X_data_4], axis=0)
-    y = np.concatenate([y_data_1, y_data_2, y_data_3, y_data_4], axis=0)
-
-    print("Forma de X (ventanas):", X.shape)  # (2800,300,6) si 700 x 4
-    print("Forma de y:", y.shape)
     return X, y
 
 # =====================================================
-# 2. Ejemplo de extracción de características
+# 2. Modelo CNN (con padding="same")
 # =====================================================
-def extract_features(X_3d, method="fft"):
+def build_model(input_length, num_classes):
     """
-    X_3d: (N, 300, 6)
-    method: "fft" para extraer magnitud del espectro (frecuencia),
-            "stats" para estadísticos básicos,
-            etc.
-    Devuelve X_feat (N, num_features).
+    Construye un modelo CNN1D para entrada de forma (input_length, 1).
+    Se usa padding="same" para no perder longitud en secuencias cortas.
     """
-    N, n_inst, n_canales = X_3d.shape
-
-    if method == "fft":
-        # Calculamos la FFT en cada ventana y cada canal
-        # (Podríamos quedarnos con las primeras 150 frecuencias, p.ej.)
-        fft_size = n_inst // 2  # ej. 150 si 300
-        X_feat = []
-        for i in range(N):
-            window = X_3d[i]  # shape (300,6)
-            # Calculamos FFT para cada canal
-            feats_window = []
-            for c in range(n_canales):
-                sig = window[:, c]
-                fft_vals = np.fft.rfft(sig)  # tamaño ~151 si 300
-                mag = np.abs(fft_vals)
-                # Te quedas con todo, o recortas
-                mag = mag[:fft_size]  # 150
-                feats_window.append(mag)
-            feats_window = np.concatenate(feats_window, axis=0)  # (6*150,)
-            X_feat.append(feats_window)
-        X_feat = np.array(X_feat)  # (N, 6*150=900)
-        return X_feat
-
-    elif method == "stats":
-        # Calculamos media, std, max, min, RMS, etc. para cada canal
-        # Ejemplo sencillo:
-        X_feat = []
-        for i in range(N):
-            window = X_3d[i]  # (300,6)
-            feats_window = []
-            for c in range(n_canales):
-                sig = window[:, c]
-                mean_ = np.mean(sig)
-                std_ = np.std(sig)
-                maxi_ = np.max(sig)
-                mini_ = np.min(sig)
-                # RMS
-                rms_ = np.sqrt(np.mean(sig**2))
-                feats_window += [mean_, std_, maxi_, mini_, rms_]
-            X_feat.append(feats_window)
-        X_feat = np.array(X_feat)  # shape (N, 5*n_canales)
-        return X_feat
-
-    else:
-        raise ValueError("Método de extracción de features no reconocido.")
-
-# =====================================================
-# 3. RandomForest (u otro clasificador tradicional)
-# =====================================================
-def test_random_forest(X_3d, y):
-    """
-    Demuestra cómo usar un clasificador tradicional (RandomForest).
-    - O bien usas X_3d crudo aplanado: (N, 300*6)
-    - O aplicas extract_features(X_3d) antes.
-    """
-    # Aplanar crudo (N,1800) [OPCIONAL]
-    N, n_inst, n_canales = X_3d.shape
-    X_flat = X_3d.reshape(N, n_inst*n_canales)
-
-    # O usar un feature extraction:
-    # X_feat = extract_features(X_3d, method="fft")
-    # X_feat = extract_features(X_3d, method="stats")
-
-    # Aquí, usaremos X_flat crudo para la demo
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_flat, y, test_size=0.2, random_state=42
-    )
-    clf = RandomForestClassifier(n_estimators=100, random_state=42)
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
-    acc = accuracy_score(y_test, y_pred)
-    print(f"RandomForest accuracy (crudo aplanado): {acc*100:.2f}%")
-
-# =====================================================
-# 4. CNN
-# =====================================================
-def build_model(n_instancias, n_canales):
     model = keras.Sequential([
-        keras.Input(shape=(n_instancias, n_canales)),
-        layers.Conv1D(filters=128, kernel_size=7, activation='relu'),
+        keras.Input(shape=(input_length, 1)),
+
+        layers.Conv1D(filters=64, kernel_size=3, activation='relu', padding='same'),
         layers.MaxPooling1D(pool_size=2),
-        layers.Conv1D(filters=128, kernel_size=5, activation='relu'),
-        layers.MaxPooling1D(pool_size=2),
-        layers.Conv1D(filters=128, kernel_size=3, activation='relu'),
+
+        layers.Conv1D(filters=64, kernel_size=3, activation='relu', padding='same'),
         layers.Flatten(),
-        layers.Dense(256, activation='relu'),
+
+        layers.Dense(128, activation='relu'),
         layers.Dropout(0.5),
-        layers.Dense(4, activation='softmax')  # 4 clases
+        layers.Dense(num_classes, activation='softmax')
     ])
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=1e-3),
@@ -206,9 +116,12 @@ def build_model(n_instancias, n_canales):
     return model
 
 # =====================================================
-# 5. Saliency Map
+# 3. Saliency Map
 # =====================================================
 def compute_saliency_map(model, X_sample, class_idx=None):
+    """
+    X_sample: tf.Variable con forma (1, input_length, 1)
+    """
     X_var = tf.Variable(X_sample, dtype=tf.float32)
     with tf.GradientTape() as tape:
         tape.watch(X_var)
@@ -221,19 +134,15 @@ def compute_saliency_map(model, X_sample, class_idx=None):
     return saliency.numpy()
 
 def plot_saliency_map(X_signal, saliency, titulo="Mapa de Saliencia", save_path=None):
-    n_canales = X_signal.shape[1]
-    fig, axes = plt.subplots(n_canales, 1, figsize=(12, 3*n_canales))
-    
-    if n_canales == 1:
-        axes = [axes]
-    
-    for i in range(n_canales):
-        axes[i].plot(X_signal[:, i], label='Señal')
-        axes[i].plot(saliency[:, i], label='Saliencia')
-        axes[i].set_title(f'Canal {i}')
-        axes[i].legend()
-    
-    plt.suptitle(titulo)
+    """
+    - X_signal: shape (M, 1)
+    - saliency: shape (M, 1)
+    """
+    fig, ax = plt.subplots(figsize=(12, 4))
+    ax.plot(X_signal[:, 0], label='Señal')
+    ax.plot(saliency[:, 0], label='Saliencia')
+    ax.set_title(titulo)
+    ax.legend()
     plt.tight_layout()
     
     if save_path is not None:
@@ -241,73 +150,52 @@ def plot_saliency_map(X_signal, saliency, titulo="Mapa de Saliencia", save_path=
     plt.close(fig)
 
 # =====================================================
-# 6. Script Principal
+# 4. Script Principal
 # =====================================================
 if __name__ == "__main__":
-    # -----------------------------------------------------
-    # OPCIÓN A: Cargar datos aplanados (N,1800) -> (N,300,6)
-    # (si cada CSV ya es 1800 columnas)
-    # -----------------------------------------------------
-    # X_apl, y = load_data_aplanado()
-    # # Damos forma 3D si no la tuviera
-    # # Suponiendo que X_apl.shape[1] == 1800
-    # N = X_apl.shape[0]
-    # X_3d = X_apl.reshape(N, 300, 6)
+    # Ajusta si quieres otra carpeta de salida
+    results_dir = os.path.join("severidad_alta", "resultados_finales")
+    os.makedirs(results_dir, exist_ok=True)
 
-    # -----------------------------------------------------
-    # OPCIÓN B: Cargar datos con 210000 filas y 6 col -> trocear a (700,300,6)
-    # -----------------------------------------------------
-    X_3d, y = load_data_ventanas()
-
-    print("Shape final X_3d:", X_3d.shape)
-    print("Shape y:", y.shape)
-
-    # Normalización min-max global
-    X_min = X_3d.min(axis=(0,1), keepdims=True)
-    X_max = X_3d.max(axis=(0,1), keepdims=True)
-    eps = 1e-8
-    X_3d = (X_3d - X_min) / (X_max - X_min + eps)
-
-    # -----------------------------------------------------
-    # 6.1 Prueba con RandomForest (clásico) para ver si supera 25%
-    # -----------------------------------------------------
-    test_random_forest(X_3d, y)
-
-    # -----------------------------------------------------
-    # 6.2 CNN con K-Fold
-    # -----------------------------------------------------
-    os.makedirs("resultados_finales", exist_ok=True)
-    saliency_dir = os.path.join("resultados_finales", "saliency")
+    saliency_dir = os.path.join(results_dir, "saliency")
     os.makedirs(saliency_dir, exist_ok=True)
 
-    n_instancias = X_3d.shape[1]  # 300
-    n_canales = X_3d.shape[2]     # 6
+    # 4.1 Cargamos datos (con padding de columnas)
+    X, y = load_data(base_dir="severidad_alta/resultados")
 
-    k = 5
+    # Añadimos dimensión de canal: (N, M) -> (N, M, 1)
+    X = X[..., np.newaxis]
+    print("Nuevo shape de X para Conv1D:", X.shape)
+
+    num_clases = len(np.unique(y))
+    input_length = X.shape[1]
+
+    # 4.2 Validación Cruzada
+    k = 2
     kf = KFold(n_splits=k, shuffle=True, random_state=42)
     fold_no = 1
     acc_per_fold = []
     loss_per_fold = []
     histories = []
 
-    log_folds_path = os.path.join("resultados_finales", "resultados_folds.txt")
+    log_folds_path = os.path.join(results_dir, "resultados_folds.txt")
     with open(log_folds_path, "w") as f_log:
         f_log.write("=== Validación Cruzada (K-Fold) ===\n")
 
-        for train_index, val_index in kf.split(X_3d):
+        for train_index, val_index in kf.split(X):
             f_log.write(f"\n--- Fold {fold_no} ---\n")
             print(f"\n--- Fold {fold_no} ---")
 
-            X_train_cv, X_val_cv = X_3d[train_index], X_3d[val_index]
+            X_train_cv, X_val_cv = X[train_index], X[val_index]
             y_train_cv, y_val_cv = y[train_index], y[val_index]
             
-            model = build_model(n_instancias, n_canales)
+            model = build_model(input_length, num_classes=num_clases)
             history = model.fit(
                 X_train_cv, y_train_cv,
-                epochs=50,
+                epochs=10,
                 batch_size=32,
                 validation_data=(X_val_cv, y_val_cv),
-                verbose=0
+                verbose=1  # Cambia a 1 o 2 para ver el progreso
             )
             
             scores = model.evaluate(X_val_cv, y_val_cv, verbose=0)
@@ -321,6 +209,7 @@ if __name__ == "__main__":
             histories.append(history)
             fold_no += 1
 
+        # Promedio de folds
         mean_acc = np.mean(acc_per_fold)
         std_acc = np.std(acc_per_fold)
         mean_loss = np.mean(loss_per_fold)
@@ -333,7 +222,7 @@ if __name__ == "__main__":
         print(f"> Accuracy: {mean_acc*100:.2f}% (± {std_acc*100:.2f}%)")
         print(f"> Loss: {mean_loss:.4f}")
 
-    # Curva de entrenamiento del primer fold
+    # 4.3 Graficamos la curva de entrenamiento del primer fold
     history_example = histories[0]
     fig_curvas, ax = plt.subplots(1, 2, figsize=(12,5))
     ax[0].plot(history_example.history['loss'], label='Train Loss')
@@ -351,12 +240,12 @@ if __name__ == "__main__":
     ax[1].legend()
 
     plt.tight_layout()
-    plt.savefig(os.path.join("resultados_finales", "curvas_fold_1.png"), dpi=150)
+    plt.savefig(os.path.join(results_dir, "curvas_fold_1.png"), dpi=150)
     plt.close(fig_curvas)
 
-    # Entrenamiento final con TODOS los datos
-    model_final = build_model(n_instancias, n_canales)
-    history_final = model_final.fit(X_3d, y, epochs=50, batch_size=32, verbose=0)
+    # 4.4 Entrenamiento final con TODOS los datos
+    model_final = build_model(input_length, num_classes=num_clases)
+    history_final = model_final.fit(X, y, epochs=20, batch_size=32, verbose=1)
 
     # Guardamos curva de entrenamiento final
     fig_final, axf = plt.subplots(1, 2, figsize=(12,5))
@@ -373,12 +262,14 @@ if __name__ == "__main__":
     axf[1].legend()
 
     plt.tight_layout()
-    plt.savefig(os.path.join("resultados_finales", "curvas_final.png"), dpi=150)
+    plt.savefig(os.path.join(results_dir, "curvas_final.png"), dpi=150)
     plt.close(fig_final)
 
-    # Evaluación con Ruido (0.05)
+    # 4.5 Evaluación con Ruido (0.05)
     noise_factor = 0.05
-    X_augmented = X_3d + noise_factor * np.random.normal(loc=0.0, scale=1.0, size=X_3d.shape)
+    X_augmented = X + noise_factor * np.random.normal(loc=0.0, scale=1.0, size=X.shape)
+    # X_augmented = np.clip(X_augmented, 0, 1)  # si quieres mantener [0,1]
+
     scores_aug = model_final.evaluate(X_augmented, y, verbose=0)
     aug_loss = scores_aug[0]
     aug_acc = scores_aug[1]
@@ -388,7 +279,7 @@ if __name__ == "__main__":
     conf_mat = confusion_matrix(y, y_pred)
     bal_acc = balanced_accuracy_score(y, y_pred)
 
-    eval_aug_path = os.path.join("resultados_finales", "eval_ruido_0.05.txt")
+    eval_aug_path = os.path.join(results_dir, "eval_ruido_0.05.txt")
     with open(eval_aug_path, "w") as f_eval:
         f_eval.write(f"=== Evaluación en Datos Aumentados (ruido={noise_factor}) ===\n")
         f_eval.write(f"Loss: {aug_loss:.4f} | Accuracy: {aug_acc*100:.2f}%\n\n")
@@ -398,30 +289,33 @@ if __name__ == "__main__":
         f_eval.write(str(conf_mat) + "\n")
         f_eval.write(f"Balanced Accuracy: {bal_acc:.2f}\n")
 
-    # Mapas de Saliencia
-    classes = [0,1,2,3]
+    # 4.6 Mapas de Saliencia (un ejemplo de cada clase)
+    classes = np.unique(y)
     for c in classes:
         indices_c = np.where(y == c)[0]
         if len(indices_c) == 0:
             continue
         idx = indices_c[0]
-        X_sample_c = X_3d[idx:idx+1]
+        X_sample_c = X[idx:idx+1]  # (1, M, 1)
         sal_map_c = compute_saliency_map(model_final, X_sample_c)
+
         save_fig_path = os.path.join(saliency_dir, f"saliency_clase_{c}.png")
         plot_saliency_map(
-            X_sample_c[0],
-            sal_map_c[0],
+            X_sample_c[0],   # (M, 1)
+            sal_map_c[0],    # (M, 1)
             titulo=f"Mapa de Saliencia (Clase {c})",
             save_path=save_fig_path
         )
 
-    # Diferentes niveles de ruido
+    # 4.7 Diferentes niveles de ruido y predicción
     noise_levels = [0.0, 0.01, 0.05, 0.1, 0.2]
-    eval_ruidos_path = os.path.join("resultados_finales", "eval_diferentes_ruidos.txt")
+    eval_ruidos_path = os.path.join(results_dir, "eval_diferentes_ruidos.txt")
     with open(eval_ruidos_path, "w") as f_ruidos:
         f_ruidos.write("=== Evaluación con diferentes niveles de ruido ===\n")
         for nl in noise_levels:
-            X_noisy = X_3d + nl * np.random.normal(loc=0.0, scale=1.0, size=X_3d.shape)
+            X_noisy = X + nl * np.random.normal(loc=0.0, scale=1.0, size=X.shape)
+            # X_noisy = np.clip(X_noisy, 0, 1)
+            
             scores_noisy = model_final.evaluate(X_noisy, y, verbose=0)
             noisy_loss = scores_noisy[0]
             noisy_acc = scores_noisy[1]
