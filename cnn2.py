@@ -17,20 +17,11 @@ def load_data(base_dir="severidad_alta/resultados"):
     """
     Lee todas las subcarpetas dentro de 'base_dir'.
     - En cada subcarpeta busca el archivo 'matriz_3D_aplanada.csv'.
-    - No se descartan CSV con diferente número de columnas; en lugar de eso,
-      se hace padding hasta el máximo número de columnas encontrado.
-
-    Pasos:
-      1. Recorremos todas las subcarpetas y guardamos en memoria (arr, labels).
-      2. Determinamos max_cols = mayor número de columnas entre todas.
-      3. Rellenamos con ceros a la derecha para que todas tengan shape (N, max_cols).
-      4. Concatenamos en un único X e Y.
-      5. Hacemos normalización min–max (opcional).
-
-    Retorna
-    -------
-    X : np.ndarray, shape (N_total, max_cols)
-    y : np.ndarray, shape (N_total,)
+    - Se realiza padding hasta el máximo número de columnas encontrado.
+    
+    Retorna:
+      X : np.ndarray, shape (N_total, max_cols)
+      y : np.ndarray, shape (N_total,)
     """
     subcarpetas = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
 
@@ -39,7 +30,6 @@ def load_data(base_dir="severidad_alta/resultados"):
     current_label = 0
     max_cols = 0
 
-    # 1. Recorremos subcarpetas y cargamos
     for carpeta in subcarpetas:
         csv_path = os.path.join(base_dir, carpeta, "matriz_3D_aplanada.csv")
         if not os.path.isfile(csv_path):
@@ -48,12 +38,11 @@ def load_data(base_dir="severidad_alta/resultados"):
 
         print(f"Leyendo: {csv_path} (Etiqueta = {current_label})")
         df = pd.read_csv(csv_path, header=0)
-        arr = df.values  # (N, M_i)
+        arr = df.values
 
         data_list.append(arr)
         label_list.append(np.full((arr.shape[0],), current_label, dtype=int))
 
-        # Actualizamos el máximo número de columnas
         if arr.shape[1] > max_cols:
             max_cols = arr.shape[1]
 
@@ -62,26 +51,24 @@ def load_data(base_dir="severidad_alta/resultados"):
     if not data_list:
         raise ValueError(f"No se encontraron CSV válidos en '{base_dir}'.")
 
-    # 2. Rellenamos cada arr con ceros hasta max_cols
     X_list = []
     y_list = []
     for arr, labels in zip(data_list, label_list):
         N, M_i = arr.shape
         arr_padded = np.zeros((N, max_cols), dtype=arr.dtype)
-        arr_padded[:, :M_i] = arr  # copiamos datos, y el resto queda en ceros
+        arr_padded[:, :M_i] = arr
         X_list.append(arr_padded)
         y_list.append(labels)
 
-    # 3. Concatenamos
-    X = np.concatenate(X_list, axis=0)  # (N_total, max_cols)
-    y = np.concatenate(y_list, axis=0)  # (N_total,)
+    X = np.concatenate(X_list, axis=0)
+    y = np.concatenate(y_list, axis=0)
 
     print("Shape final de X:", X.shape)
     print("Shape final de y:", y.shape)
 
-    # 4. Normalización min–max (opcional)
-    X_min = X.min(axis=0, keepdims=True)  # (1, max_cols)
-    X_max = X.max(axis=0, keepdims=True)  # (1, max_cols)
+    # Normalización min–max
+    X_min = X.min(axis=0, keepdims=True)
+    X_max = X.max(axis=0, keepdims=True)
     eps = 1e-8
     X = (X - X_min) / (X_max - X_min + eps)
 
@@ -93,17 +80,13 @@ def load_data(base_dir="severidad_alta/resultados"):
 def build_model(input_length, num_classes):
     """
     Construye un modelo CNN1D para entrada de forma (input_length, 1).
-    Se usa padding="same" para no perder longitud en secuencias cortas.
     """
     model = keras.Sequential([
         keras.Input(shape=(input_length, 1)),
-
         layers.Conv1D(filters=64, kernel_size=3, activation='relu', padding='same'),
         layers.MaxPooling1D(pool_size=2),
-
         layers.Conv1D(filters=64, kernel_size=3, activation='relu', padding='same'),
         layers.Flatten(),
-
         layers.Dense(128, activation='relu'),
         layers.Dropout(0.5),
         layers.Dense(num_classes, activation='softmax')
@@ -133,14 +116,16 @@ def compute_saliency_map(model, X_sample, class_idx=None):
     saliency = tf.math.abs(grads)
     return saliency.numpy()
 
-def plot_saliency_map(X_signal, saliency, titulo="Mapa de Saliencia", save_path=None):
+def plot_saliency_map(saliency, titulo="Mapa de Saliencia", save_path=None):
     """
-    - X_signal: shape (M, 1)
-    - saliency: shape (M, 1)
+    Grafica la saliencia usando un diagrama de barras.
+    - saliency: np.ndarray de forma (M, 1)
     """
     fig, ax = plt.subplots(figsize=(12, 4))
-    ax.plot(X_signal[:, 0], label='Señal')
-    ax.plot(saliency[:, 0], label='Saliencia')
+    x_axis = np.arange(saliency.shape[0])
+    ax.bar(x_axis, saliency[:, 0], label='Saliencia')
+    ax.set_xlabel("Índice de característica")
+    ax.set_ylabel("Valor de saliencia")
     ax.set_title(titulo)
     ax.legend()
     plt.tight_layout()
@@ -153,7 +138,6 @@ def plot_saliency_map(X_signal, saliency, titulo="Mapa de Saliencia", save_path=
 # 4. Script Principal
 # =====================================================
 if __name__ == "__main__":
-    # Ajusta si quieres otra carpeta de salida
     results_dir = os.path.join("severidad_alta", "resultados_finales")
     os.makedirs(results_dir, exist_ok=True)
 
@@ -170,7 +154,7 @@ if __name__ == "__main__":
     num_clases = len(np.unique(y))
     input_length = X.shape[1]
 
-    # 4.2 Validación Cruzada
+    # 4.2 Validación Cruzada con Early Stopping
     k = 2
     kf = KFold(n_splits=k, shuffle=True, random_state=42)
     fold_no = 1
@@ -190,12 +174,17 @@ if __name__ == "__main__":
             y_train_cv, y_val_cv = y[train_index], y[val_index]
             
             model = build_model(input_length, num_classes=num_clases)
+            
+            # Callback de Early Stopping
+            early_stop = keras.callbacks.EarlyStopping(monitor='val_loss', patience=4, restore_best_weights=True)
+            
             history = model.fit(
                 X_train_cv, y_train_cv,
-                epochs=10,
+                epochs=5,
                 batch_size=32,
                 validation_data=(X_val_cv, y_val_cv),
-                verbose=1  # Cambia a 1 o 2 para ver el progreso
+                callbacks=[early_stop],
+                verbose=1
             )
             
             scores = model.evaluate(X_val_cv, y_val_cv, verbose=0)
@@ -209,7 +198,6 @@ if __name__ == "__main__":
             histories.append(history)
             fold_no += 1
 
-        # Promedio de folds
         mean_acc = np.mean(acc_per_fold)
         std_acc = np.std(acc_per_fold)
         mean_loss = np.mean(loss_per_fold)
@@ -243,11 +231,11 @@ if __name__ == "__main__":
     plt.savefig(os.path.join(results_dir, "curvas_fold_1.png"), dpi=150)
     plt.close(fig_curvas)
 
-    # 4.4 Entrenamiento final con TODOS los datos
+    # 4.4 Entrenamiento final con TODOS los datos y Early Stopping
     model_final = build_model(input_length, num_classes=num_clases)
-    history_final = model_final.fit(X, y, epochs=20, batch_size=32, verbose=1)
+    early_stop_final = keras.callbacks.EarlyStopping(monitor='loss', patience=4, restore_best_weights=True)
+    history_final = model_final.fit(X, y, epochs=10, batch_size=32, callbacks=[early_stop_final], verbose=1)
 
-    # Guardamos curva de entrenamiento final
     fig_final, axf = plt.subplots(1, 2, figsize=(12,5))
     axf[0].plot(history_final.history['loss'], label='Train Loss')
     axf[0].set_title('Curva de Loss (Final)')
@@ -265,30 +253,26 @@ if __name__ == "__main__":
     plt.savefig(os.path.join(results_dir, "curvas_final.png"), dpi=150)
     plt.close(fig_final)
 
-    # 4.5 Evaluación con Ruido (0.05)
-    noise_factor = 0.05
-    X_augmented = X + noise_factor * np.random.normal(loc=0.0, scale=1.0, size=X.shape)
-    # X_augmented = np.clip(X_augmented, 0, 1)  # si quieres mantener [0,1]
-
-    scores_aug = model_final.evaluate(X_augmented, y, verbose=0)
-    aug_loss = scores_aug[0]
-    aug_acc = scores_aug[1]
-
-    y_pred = np.argmax(model_final.predict(X_augmented), axis=1)
-    classif_report = classification_report(y, y_pred)
-    conf_mat = confusion_matrix(y, y_pred)
-    bal_acc = balanced_accuracy_score(y, y_pred)
-
-    eval_aug_path = os.path.join(results_dir, "eval_ruido_0.05.txt")
-    with open(eval_aug_path, "w") as f_eval:
-        f_eval.write(f"=== Evaluación en Datos Aumentados (ruido={noise_factor}) ===\n")
-        f_eval.write(f"Loss: {aug_loss:.4f} | Accuracy: {aug_acc*100:.2f}%\n\n")
-        f_eval.write("Reporte de clasificación:\n")
-        f_eval.write(classif_report + "\n")
-        f_eval.write("Matriz de confusión:\n")
-        f_eval.write(str(conf_mat) + "\n")
-        f_eval.write(f"Balanced Accuracy: {bal_acc:.2f}\n")
-
+    # 4.5 Evaluación con diferentes niveles de ruido y reporte de clasificación
+    noise_levels = [0.0, 0.01, 0.05, 0.1, 0.2]
+    eval_ruidos_path = os.path.join(results_dir, "eval_diferentes_ruidos.txt")
+    with open(eval_ruidos_path, "w") as f_ruidos:
+        f_ruidos.write("=== Evaluación con diferentes niveles de ruido ===\n")
+        for nl in noise_levels:
+            X_noisy = X + nl * np.random.normal(loc=0.0, scale=1.0, size=X.shape)
+            # X_noisy = np.clip(X_noisy, 0, 1)
+            
+            scores_noisy = model_final.evaluate(X_noisy, y, verbose=0)
+            noisy_loss = scores_noisy[0]
+            noisy_acc = scores_noisy[1]
+            f_ruidos.write(f"\nRuido={nl} -> Loss: {noisy_loss:.4f} | Accuracy: {noisy_acc*100:.2f}%\n")
+            
+            # Predicciones y reporte de clasificación
+            y_pred = np.argmax(model_final.predict(X_noisy), axis=1)
+            report = classification_report(y, y_pred)
+            f_ruidos.write("Reporte de clasificación:\n")
+            f_ruidos.write(report + "\n")
+    
     # 4.6 Mapas de Saliencia (un ejemplo de cada clase)
     classes = np.unique(y)
     for c in classes:
@@ -301,22 +285,7 @@ if __name__ == "__main__":
 
         save_fig_path = os.path.join(saliency_dir, f"saliency_clase_{c}.png")
         plot_saliency_map(
-            X_sample_c[0],   # (M, 1)
-            sal_map_c[0],    # (M, 1)
+            sal_map_c[0],    # Se pasa solo la saliencia
             titulo=f"Mapa de Saliencia (Clase {c})",
             save_path=save_fig_path
         )
-
-    # 4.7 Diferentes niveles de ruido y predicción
-    noise_levels = [0.0, 0.01, 0.05, 0.1, 0.2]
-    eval_ruidos_path = os.path.join(results_dir, "eval_diferentes_ruidos.txt")
-    with open(eval_ruidos_path, "w") as f_ruidos:
-        f_ruidos.write("=== Evaluación con diferentes niveles de ruido ===\n")
-        for nl in noise_levels:
-            X_noisy = X + nl * np.random.normal(loc=0.0, scale=1.0, size=X.shape)
-            # X_noisy = np.clip(X_noisy, 0, 1)
-            
-            scores_noisy = model_final.evaluate(X_noisy, y, verbose=0)
-            noisy_loss = scores_noisy[0]
-            noisy_acc = scores_noisy[1]
-            f_ruidos.write(f"Ruido={nl} -> Loss: {noisy_loss:.4f} | Accuracy: {noisy_acc*100:.2f}%\n")
