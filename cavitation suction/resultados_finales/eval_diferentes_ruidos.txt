@@ -1,0 +1,71 @@
+=== Evaluación con diferentes niveles de ruido ===
+
+Ruido=0.0 -> Loss: 1.3847 | Accuracy: 25.00%
+Reporte de clasificación:
+              precision    recall  f1-score   support
+
+           0       0.25      1.00      0.40   1800000
+           1       0.00      0.00      0.00   1800000
+           2       0.00      0.00      0.00   1800000
+           3       0.00      0.00      0.00   1800000
+
+    accuracy                           0.25   7200000
+   macro avg       0.06      0.25      0.10   7200000
+weighted avg       0.06      0.25      0.10   7200000
+
+
+Ruido=0.01 -> Loss: 1.3847 | Accuracy: 25.00%
+Reporte de clasificación:
+              precision    recall  f1-score   support
+
+           0       0.25      1.00      0.40   1800000
+           1       0.00      0.00      0.00   1800000
+           2       0.00      0.00      0.00   1800000
+           3       0.00      0.00      0.00   1800000
+
+    accuracy                           0.25   7200000
+   macro avg       0.06      0.25      0.10   7200000
+weighted avg       0.06      0.25      0.10   7200000
+
+
+Ruido=0.05 -> Loss: 1.3847 | Accuracy: 25.00%
+Reporte de clasificación:
+              precision    recall  f1-score   support
+
+           0       0.25      1.00      0.40   1800000
+           1       0.00      0.00      0.00   1800000
+           2       0.00      0.00      0.00   1800000
+           3       0.00      0.00      0.00   1800000
+
+    accuracy                           0.25   7200000
+   macro avg       0.06      0.25      0.10   7200000
+weighted avg       0.06      0.25      0.10   7200000
+
+
+Ruido=0.1 -> Loss: 1.3847 | Accuracy: 25.00%
+Reporte de clasificación:
+              precision    recall  f1-score   support
+
+           0       0.25      1.00      0.40   1800000
+           1       0.00      0.00      0.00   1800000
+           2       0.00      0.00      0.00   1800000
+           3       0.00      0.00      0.00   1800000
+
+    accuracy                           0.25   7200000
+   macro avg       0.06      0.25      0.10   7200000
+weighted avg       0.06      0.25      0.10   7200000
+
+
+Ruido=0.2 -> Loss: 1.3847 | Accuracy: 25.00%
+Reporte de clasificación:
+              precision    recall  f1-score   support
+
+           0       0.25      1.00      0.40   1800000
+           1       0.00      0.00      0.00   1800000
+           2       0.00      0.00      0.00   1800000
+           3       0.00      0.00      0.00   1800000
+
+    accuracy                           0.25   7200000
+   macro avg       0.06      0.25      0.10   7200000
+weighted avg       0.06      0.25      0.10   7200000
+

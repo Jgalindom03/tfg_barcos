@@ -1,0 +1,11 @@
+=== Validación Cruzada (K-Fold) ===
+
+--- Fold 1 ---
+Fold 1 -> Loss: 0.4282 | Accuracy: 82.94%
+
+--- Fold 2 ---
+Fold 2 -> Loss: 0.3589 | Accuracy: 85.67%
+
+Promedio de todos los folds:
+> Accuracy: 84.31% (± 1.37%)
+> Loss: 0.3936
