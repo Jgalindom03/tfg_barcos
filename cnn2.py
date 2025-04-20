@@ -7,95 +7,53 @@ layers = tf.keras.layers
 
 import matplotlib.pyplot as plt
 
-from sklearn.model_selection import KFold
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import KFold, train_test_split
 from sklearn.metrics import classification_report, confusion_matrix, balanced_accuracy_score
 
 # =====================================================
-# 1. Lectura de datos con padding para columnas variables
+# 1. Lectura de datos desde signals.csv y labels.csv
 # =====================================================
-def load_data(base_dir="severidad_alta/resultados"):
-    """
-    Lee todas las subcarpetas dentro de 'base_dir'.
-    - En cada subcarpeta busca el archivo 'matriz_3D_aplanada.csv'.
-    - Se realiza padding hasta el máximo número de columnas encontrado.
+def load_data(data_dir="data"):
+    signals_path = os.path.join(data_dir, "signals.csv")
+    labels_path  = os.path.join(data_dir, "labels.csv")
     
-    Retorna:
-      X : np.ndarray, shape (N_total, max_cols)
-      y : np.ndarray, shape (N_total,)
-    """
-    subcarpetas = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
-
-    data_list = []
-    label_list = []
-    current_label = 0
-    max_cols = 0
-
-    for carpeta in subcarpetas:
-        csv_path = os.path.join(base_dir, carpeta, "matriz_3D_aplanada.csv")
-        if not os.path.isfile(csv_path):
-            print(f"[Aviso] No se encontró {csv_path}. Se omite la carpeta '{carpeta}'.")
-            continue
-
-        print(f"Leyendo: {csv_path} (Etiqueta = {current_label})")
-        df = pd.read_csv(csv_path, header=0)
-        arr = df.values
-
-        data_list.append(arr)
-        label_list.append(np.full((arr.shape[0],), current_label, dtype=int))
-
-        if arr.shape[1] > max_cols:
-            max_cols = arr.shape[1]
-
-        current_label += 1
-
-    if not data_list:
-        raise ValueError(f"No se encontraron CSV válidos en '{base_dir}'.")
-
-    X_list = []
-    y_list = []
-    for arr, labels in zip(data_list, label_list):
-        N, M_i = arr.shape
-        arr_padded = np.zeros((N, max_cols), dtype=arr.dtype)
-        arr_padded[:, :M_i] = arr
-        X_list.append(arr_padded)
-        y_list.append(labels)
-
-    X = np.concatenate(X_list, axis=0)
-    y = np.concatenate(y_list, axis=0)
-
-    print("Shape final de X:", X.shape)
-    print("Shape final de y:", y.shape)
-
-    # Normalización min–max
-    X_min = X.min(axis=0, keepdims=True)
-    X_max = X.max(axis=0, keepdims=True)
-    eps = 1e-8
-    X = (X - X_min) / (X_max - X_min + eps)
-
-    return X, y
+    df_signals = pd.read_csv(signals_path, header=None)
+    df_labels  = pd.read_csv(labels_path, header=None)
+    
+    return df_signals.values, df_labels.values
 
 # =====================================================
-# 2. Modelo CNN (con padding="same")
+# 2. Modelo CNN (Conv1D)
 # =====================================================
 def build_model(input_length, num_classes):
     """
-    Construye un modelo CNN1D para entrada de forma (input_length, 1).
+    Modelo CNN1D mejorado para reducir sobreajuste.
     """
+    #l2_reg = keras.regularizers.l2(1e-4)
+
     model = keras.Sequential([
         keras.Input(shape=(input_length, 1)),
-        layers.Conv1D(filters=64, kernel_size=3, activation='relu', padding='same'),
-        layers.MaxPooling1D(pool_size=2),
-        layers.Conv1D(filters=64, kernel_size=3, activation='relu', padding='same'),
+
+        layers.Conv1D(filters=16, kernel_size=3, padding='same'),
+        #layers.BatchNormalization(),
+        layers.Activation('relu'),
+        layers.MaxPooling1D(pool_size=1),
+
         layers.Flatten(),
-        layers.Dense(128, activation='relu'),
-        layers.Dropout(0.5),
+
+        layers.Dense(64, activation='relu'),
+        layers.Dropout(0.3),
+
         layers.Dense(num_classes, activation='softmax')
     ])
+
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=1e-3),
         loss='sparse_categorical_crossentropy',
         metrics=['accuracy']
     )
+
     return model
 
 # =====================================================
@@ -104,6 +62,7 @@ def build_model(input_length, num_classes):
 def compute_saliency_map(model, X_sample, class_idx=None):
     """
     X_sample: tf.Variable con forma (1, input_length, 1)
+    Calcula el mapa de saliencia para la muestra dada.
     """
     X_var = tf.Variable(X_sample, dtype=tf.float32)
     with tf.GradientTape() as tape:
@@ -135,116 +94,74 @@ def plot_saliency_map(saliency, titulo="Mapa de Saliencia", save_path=None):
     plt.close(fig)
 
 # =====================================================
-# 4. Script Principal
+# 4. Script Principal con separación de Test
 # =====================================================
 if __name__ == "__main__":
-    results_dir = os.path.join("severidad_alta", "resultados_finales")
+    # Directorio de resultados dentro de la carpeta data
+    results_dir = os.path.join("data", "resultados_finales")
     os.makedirs(results_dir, exist_ok=True)
 
     saliency_dir = os.path.join(results_dir, "saliency")
     os.makedirs(saliency_dir, exist_ok=True)
 
-    # 4.1 Cargamos datos (con padding de columnas)
-    X, y = load_data(base_dir="severidad_alta/resultados")
+    # 4.1 Cargamos datos
+    X, y = load_data(data_dir="data")
+    y = y - 1
 
-    # Añadimos dimensión de canal: (N, M) -> (N, M, 1)
-    X = X[..., np.newaxis]
-    print("Nuevo shape de X para Conv1D:", X.shape)
+    transformations = []
+    for i in range(X.shape[0]):
+        transformations.append(MinMaxScaler().fit_transform(X[i, :].reshape(-1, 1)).flatten())
+    X = transformations
+    X = np.array(X)  # Convertir a numpy array
+    X = X.reshape(X.shape[0], X.shape[1], 1)  # Añadimos dimensión de canal
+
+
+    print(X.shape, y.shape)
+
+    # (Opcional) Graficar algunas señales para verificar
+    for i in range(4):
+        plt.plot(X[i, :], label=f"Label: {y[i]+1}")
+        plt.title(f"Señal {i} - Etiqueta: {y[i]+1}")
+        plt.legend()
+        plt.show()
 
     num_clases = len(np.unique(y))
     input_length = X.shape[1]
 
-    # 4.2 Validación Cruzada con Early Stopping
-    k = 2
-    kf = KFold(n_splits=k, shuffle=True, random_state=42)
-    fold_no = 1
-    acc_per_fold = []
-    loss_per_fold = []
-    histories = []
+    # 4.2 Separación en conjuntos de entrenamiento y test
+    # Se utiliza 80% para entrenamiento y 20% para test, manteniendo la estratificación de clases
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+    print("Shape de X_train:", X_train.shape)
+    print("Shape de X_test:", X_test.shape)
 
-    log_folds_path = os.path.join(results_dir, "resultados_folds.txt")
-    with open(log_folds_path, "w") as f_log:
-        f_log.write("=== Validación Cruzada (K-Fold) ===\n")
+    y_train = y_train.reshape(1, -1)[0]  # Convertir a 1D
+    y_test = y_test.reshape(1, -1)[0]    # Convertir a 1D
 
-        for train_index, val_index in kf.split(X):
-            f_log.write(f"\n--- Fold {fold_no} ---\n")
-            print(f"\n--- Fold {fold_no} ---")
-
-            X_train_cv, X_val_cv = X[train_index], X[val_index]
-            y_train_cv, y_val_cv = y[train_index], y[val_index]
-            
-            model = build_model(input_length, num_classes=num_clases)
-            
-            # Callback de Early Stopping
-            early_stop = keras.callbacks.EarlyStopping(monitor='val_loss', patience=4, restore_best_weights=True)
-            
-            history = model.fit(
-                X_train_cv, y_train_cv,
-                epochs=5,
-                batch_size=32,
-                validation_data=(X_val_cv, y_val_cv),
-                callbacks=[early_stop],
-                verbose=1
-            )
-            
-            scores = model.evaluate(X_val_cv, y_val_cv, verbose=0)
-            fold_loss = scores[0]
-            fold_acc = scores[1]
-            print(f"Fold {fold_no} -> Loss: {fold_loss:.4f} | Accuracy: {fold_acc*100:.2f}%")
-            f_log.write(f"Fold {fold_no} -> Loss: {fold_loss:.4f} | Accuracy: {fold_acc*100:.2f}%\n")
-
-            acc_per_fold.append(fold_acc)
-            loss_per_fold.append(fold_loss)
-            histories.append(history)
-            fold_no += 1
-
-        mean_acc = np.mean(acc_per_fold)
-        std_acc = np.std(acc_per_fold)
-        mean_loss = np.mean(loss_per_fold)
-
-        f_log.write("\nPromedio de todos los folds:\n")
-        f_log.write(f"> Accuracy: {mean_acc*100:.2f}% (± {std_acc*100:.2f}%)\n")
-        f_log.write(f"> Loss: {mean_loss:.4f}\n")
-
-        print("\nPromedio de todos los folds:")
-        print(f"> Accuracy: {mean_acc*100:.2f}% (± {std_acc*100:.2f}%)")
-        print(f"> Loss: {mean_loss:.4f}")
-
-    # 4.3 Graficamos la curva de entrenamiento del primer fold
-    history_example = histories[0]
-    fig_curvas, ax = plt.subplots(1, 2, figsize=(12,5))
-    ax[0].plot(history_example.history['loss'], label='Train Loss')
-    ax[0].plot(history_example.history['val_loss'], label='Val Loss')
-    ax[0].set_title('Curva de Loss (Fold 1)')
-    ax[0].set_xlabel('Epoch')
-    ax[0].set_ylabel('Loss')
-    ax[0].legend()
-
-    ax[1].plot(history_example.history['accuracy'], label='Train Accuracy')
-    ax[1].plot(history_example.history['val_accuracy'], label='Val Accuracy')
-    ax[1].set_title('Curva de Accuracy (Fold 1)')
-    ax[1].set_xlabel('Epoch')
-    ax[1].set_ylabel('Accuracy')
-    ax[1].legend()
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(results_dir, "curvas_fold_1.png"), dpi=150)
-    plt.close(fig_curvas)
-
-    # 4.4 Entrenamiento final con TODOS los datos y Early Stopping
+    print(np.unique(y))
+    
+    # 4.5 Entrenamiento final con TODOS los datos de entrenamiento y Early Stopping
     model_final = build_model(input_length, num_classes=num_clases)
-    early_stop_final = keras.callbacks.EarlyStopping(monitor='loss', patience=4, restore_best_weights=True)
-    history_final = model_final.fit(X, y, epochs=10, batch_size=32, callbacks=[early_stop_final], verbose=1)
+    early_stop_final = keras.callbacks.EarlyStopping(monitor='loss', patience=10, restore_best_weights=True)
+    history_final = model_final.fit(
+        X_train, y_train,
+        validation_split=0.2,
+        epochs=100,
+        batch_size=32,
+        callbacks=[early_stop_final],
+        verbose=1
+    )
 
     fig_final, axf = plt.subplots(1, 2, figsize=(12,5))
     axf[0].plot(history_final.history['loss'], label='Train Loss')
-    axf[0].set_title('Curva de Loss (Final)')
+    axf[0].set_title('Curva de Loss (Final - Entrenamiento)')
     axf[0].set_xlabel('Epoch')
     axf[0].set_ylabel('Loss')
     axf[0].legend()
 
     axf[1].plot(history_final.history['accuracy'], label='Train Accuracy')
-    axf[1].set_title('Curva de Accuracy (Final)')
+    axf[1].set_title('Curva de Accuracy (Final - Entrenamiento)')
     axf[1].set_xlabel('Epoch')
     axf[1].set_ylabel('Accuracy')
     axf[1].legend()
@@ -253,39 +170,27 @@ if __name__ == "__main__":
     plt.savefig(os.path.join(results_dir, "curvas_final.png"), dpi=150)
     plt.close(fig_final)
 
-    # 4.5 Evaluación con diferentes niveles de ruido y reporte de clasificación
+    # 4.6 Evaluación final del modelo en el conjunto de Test
+    scores_test = model_final.evaluate(X_test, y_test, verbose=0)
+    print(f"Test -> Loss: {scores_test[0]:.4f} | Accuracy: {scores_test[1]*100:.2f}%")
+    with open(os.path.join(results_dir, "resultados_test.txt"), "w") as f_test:
+        f_test.write(f"Test -> Loss: {scores_test[0]:.4f} | Accuracy: {scores_test[1]*100:.2f}%\n")
+
+    # 4.7 Evaluación en Test con diferentes niveles de ruido y reporte de clasificación
     noise_levels = [0.0, 0.01, 0.05, 0.1, 0.2]
-    eval_ruidos_path = os.path.join(results_dir, "eval_diferentes_ruidos.txt")
+    eval_ruidos_path = os.path.join(results_dir, "eval_diferentes_ruidos_test.txt")
     with open(eval_ruidos_path, "w") as f_ruidos:
-        f_ruidos.write("=== Evaluación con diferentes niveles de ruido ===\n")
+        f_ruidos.write("=== Evaluación en Test con diferentes niveles de ruido ===\n")
         for nl in noise_levels:
-            X_noisy = X + nl * np.random.normal(loc=0.0, scale=1.0, size=X.shape)
-            # X_noisy = np.clip(X_noisy, 0, 1)
-            
-            scores_noisy = model_final.evaluate(X_noisy, y, verbose=0)
+            X_test_noisy = X_test + nl * np.random.normal(loc=0.0, scale=1.0, size=X_test.shape)
+            scores_noisy = model_final.evaluate(X_test_noisy, y_test, verbose=0)
             noisy_loss = scores_noisy[0]
             noisy_acc = scores_noisy[1]
             f_ruidos.write(f"\nRuido={nl} -> Loss: {noisy_loss:.4f} | Accuracy: {noisy_acc*100:.2f}%\n")
             
-            # Predicciones y reporte de clasificación
-            y_pred = np.argmax(model_final.predict(X_noisy), axis=1)
-            report = classification_report(y, y_pred)
+            # Predicciones y reporte de clasificación en Test
+            y_pred = np.argmax(model_final.predict(X_test_noisy), axis=1)
+            report = classification_report(y_test, y_pred)
             f_ruidos.write("Reporte de clasificación:\n")
             f_ruidos.write(report + "\n")
     
-    # 4.6 Mapas de Saliencia (un ejemplo de cada clase)
-    classes = np.unique(y)
-    for c in classes:
-        indices_c = np.where(y == c)[0]
-        if len(indices_c) == 0:
-            continue
-        idx = indices_c[0]
-        X_sample_c = X[idx:idx+1]  # (1, M, 1)
-        sal_map_c = compute_saliency_map(model_final, X_sample_c)
-
-        save_fig_path = os.path.join(saliency_dir, f"saliency_clase_{c}.png")
-        plot_saliency_map(
-            sal_map_c[0],    # Se pasa solo la saliencia
-            titulo=f"Mapa de Saliencia (Clase {c})",
-            save_path=save_fig_path
-        )
