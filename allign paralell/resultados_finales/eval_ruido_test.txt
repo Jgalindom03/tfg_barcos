@@ -1,0 +1,66 @@
+=== Evaluación Test con distintos ruidos ===
+
+Ruido=0.0 -> Loss: 1.3863 | Acc: 25.00% | BalAcc: 0.2500
+              precision    recall  f1-score   support
+
+           0       0.25      1.00      0.40     42000
+           1       0.00      0.00      0.00     42000
+           2       0.00      0.00      0.00     42000
+           3       0.00      0.00      0.00     42000
+
+    accuracy                           0.25    168000
+   macro avg       0.06      0.25      0.10    168000
+weighted avg       0.06      0.25      0.10    168000
+
+
+Ruido=0.01 -> Loss: 1.3863 | Acc: 25.00% | BalAcc: 0.2500
+              precision    recall  f1-score   support
+
+           0       0.25      1.00      0.40     42000
+           1       0.00      0.00      0.00     42000
+           2       0.00      0.00      0.00     42000
+           3       0.00      0.00      0.00     42000
+
+    accuracy                           0.25    168000
+   macro avg       0.06      0.25      0.10    168000
+weighted avg       0.06      0.25      0.10    168000
+
+
+Ruido=0.05 -> Loss: 1.3863 | Acc: 25.00% | BalAcc: 0.2500
+              precision    recall  f1-score   support
+
+           0       0.25      1.00      0.40     42000
+           1       0.00      0.00      0.00     42000
+           2       0.00      0.00      0.00     42000
+           3       0.00      0.00      0.00     42000
+
+    accuracy                           0.25    168000
+   macro avg       0.06      0.25      0.10    168000
+weighted avg       0.06      0.25      0.10    168000
+
+
+Ruido=0.1 -> Loss: 1.3863 | Acc: 25.00% | BalAcc: 0.2500
+              precision    recall  f1-score   support
+
+           0       0.25      1.00      0.40     42000
+           1       0.27      0.00      0.00     42000
+           2       0.00      0.00      0.00     42000
+           3       0.00      0.00      0.00     42000
+
+    accuracy                           0.25    168000
+   macro avg       0.13      0.25      0.10    168000
+weighted avg       0.13      0.25      0.10    168000
+
+
+Ruido=0.2 -> Loss: 1.3863 | Acc: 24.93% | BalAcc: 0.2493
+              precision    recall  f1-score   support
+
+           0       0.25      0.95      0.40     42000
+           1       0.24      0.04      0.07     42000
+           2       0.00      0.00      0.00     42000
+           3       0.00      0.00      0.00     42000
+
+    accuracy                           0.25    168000
+   macro avg       0.12      0.25      0.12    168000
+weighted avg       0.12      0.25      0.12    168000
+

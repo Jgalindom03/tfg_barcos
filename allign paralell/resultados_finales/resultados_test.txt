@@ -1,0 +1,19 @@
+Test -> Loss: 1.3863 | Accuracy: 25.00%
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.25      1.00      0.40     42000
+           1       0.00      0.00      0.00     42000
+           2       0.00      0.00      0.00     42000
+           3       0.00      0.00      0.00     42000
+
+    accuracy                           0.25    168000
+   macro avg       0.06      0.25      0.10    168000
+weighted avg       0.06      0.25      0.10    168000
+
+Confusion Matrix:
+[[42000     0     0     0]
+ [42000     0     0     0]
+ [42000     0     0     0]
+ [42000     0     0     0]]
