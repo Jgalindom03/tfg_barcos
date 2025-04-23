@@ -13,7 +13,7 @@ from sklearn.metrics import classification_report, confusion_matrix, balanced_ac
 # =====================================================
 # 1. Lectura de datos con padding para columnas variables
 # =====================================================
-def load_data(base_dir="cavitation suction/resultados"):
+def load_data(base_dir="align combination/resultados"):
     subcarpetas = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
 
     data_list = []
@@ -125,14 +125,14 @@ def plot_saliency_map(saliency, titulo="Mapa de Saliencia", save_path=None):
 # 4. Script Principal con split Train/Test
 # =====================================================
 if __name__ == "__main__":
-    results_dir = os.path.join("cavitation suction", "resultados_finales")
+    results_dir = os.path.join("align combination", "resultados_finales")
     os.makedirs(results_dir, exist_ok=True)
 
     saliency_dir = os.path.join(results_dir, "saliency")
     os.makedirs(saliency_dir, exist_ok=True)
 
     # 4.1 Carga y preprocesado
-    X, y = load_data(base_dir="cavitation suction/resultados")
+    X, y = load_data(base_dir="align combination/resultados")
     X = X[..., np.newaxis]
     num_clases = len(np.unique(y))
     input_length = X.shape[1]
@@ -161,10 +161,14 @@ if __name__ == "__main__":
     axes[0].plot(history.history['loss'], label='Train Loss')
     axes[0].plot(history.history['val_loss'], label='Val Loss')
     axes[0].set_title('Loss entrenamiento')
+    axes[0].set_xlabel('Época')                   # Etiqueta eje X
+    axes[0].set_ylabel('Valor de Loss')           # Etiqueta eje Y
     axes[0].legend()
     axes[1].plot(history.history['accuracy'], label='Train Acc')
     axes[1].plot(history.history['val_accuracy'], label='Val Acc')
     axes[1].set_title('Accuracy entrenamiento')
+    axes[1].set_xlabel('Época')                   # Etiqueta eje X
+    axes[1].set_ylabel('Valor de Accuracy')       # Etiqueta eje Y
     axes[1].legend()
     plt.tight_layout()
     plt.savefig(os.path.join(results_dir, "curvas_entrenamiento.png"), dpi=150)
