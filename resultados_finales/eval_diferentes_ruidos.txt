@@ -1,6 +1,0 @@
-=== Evaluación con diferentes niveles de ruido ===
-Ruido=0.0 -> Loss: 1.3863 | Accuracy: 25.00%
-Ruido=0.01 -> Loss: 1.3863 | Accuracy: 25.00%
-Ruido=0.05 -> Loss: 1.3863 | Accuracy: 25.00%
-Ruido=0.1 -> Loss: 1.3863 | Accuracy: 25.00%
-Ruido=0.2 -> Loss: 1.3863 | Accuracy: 25.00%
