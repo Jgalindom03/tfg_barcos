@@ -19,19 +19,22 @@ def guardar_para_eda(matriz_3D, ruta_guardado):
         f.create_dataset("matriz_3D", data=matriz_3D)
     print(f"Matriz guardada en formato HDF5: {hdf5_path}")
 
-    # Aplanar la matriz 3D a 2D
-    matriz_aplanada = matriz_3D.reshape(-1, matriz_3D.shape[2])
+    # Transponemos (archivos, filas, cols) → (filas, cols, archivos)
+    arr_t = matriz_3D.transpose(1, 2, 0)
+    # Aplanamos filas+cols → (filas*cols, archivos)
+    matriz_aplanada = arr_t.reshape(-1, matriz_3D.shape[0])
 
-    # Guardar en CSV (matriz aplanada)
     csv_path = os.path.join(ruta_guardado, "matriz_3D_aplanada.csv")
-    header = ",".join([f"Ch{i+1}" for i in range(matriz_3D.shape[2])])
+    header   = ",".join([f"Ch{i+1}" for i in range(matriz_3D.shape[0])])
     np.savetxt(csv_path, matriz_aplanada, delimiter=",", header=header, comments="")
-    print(f"Matriz guardada en formato CSV aplanado: {csv_path}")
 
-    # Guardar también como DataFrame CSV
-    df = pd.DataFrame(matriz_aplanada, columns=[f"Ch{i+1}" for i in range(matriz_3D.shape[2])])
+    # ——— El bloque para DataFrame también ajusta la cabecera ———
+    df      = pd.DataFrame(matriz_aplanada, columns=[f"Ch{i+1}" for i in range(matriz_3D.shape[0])])
     df_path = os.path.join(ruta_guardado, "matriz_3D_aplanada_dataframe.csv")
     df.to_csv(df_path, index=False)
+    # ————————————————————————————————————————————————
+
+    print(f"Matriz guardada en formato CSV aplanado: {csv_path}")
     print(f"Matriz guardada como DataFrame CSV: {df_path}")
 
 
@@ -63,6 +66,10 @@ def cargar_y_formar_matriz(carpeta):
     for archivo in archivos_csv:
         ruta_archivo = os.path.join(carpeta, archivo)
         df = pd.read_csv(ruta_archivo)
+
+        if 'time' in df.columns:
+            df = df.drop(columns=['time'])
+
 
         # Convertir a numpy sin recortar ni exigir un tamaño fijo
         arr = df.to_numpy()

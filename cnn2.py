@@ -13,7 +13,7 @@ from sklearn.metrics import classification_report, confusion_matrix, balanced_ac
 # =====================================================
 # 1. Lectura de datos con padding para columnas variables
 # =====================================================
-def load_data(base_dir="align combination/resultados"):
+def load_data(base_dir="allign paralell/resultados"):
     subcarpetas = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
 
     data_list = []
@@ -29,6 +29,9 @@ def load_data(base_dir="align combination/resultados"):
 
         print(f"Leyendo: {csv_path} (Etiqueta = {current_label})")
         df = pd.read_csv(csv_path, header=0)
+        # Eliminar columna 'time' si existe (aunque no debería en CSV aplanado)
+        if 'time' in df.columns:
+            df = df.drop(columns=['time'])
         arr = df.values
 
         data_list.append(arr)
@@ -125,14 +128,14 @@ def plot_saliency_map(saliency, titulo="Mapa de Saliencia", save_path=None):
 # 4. Script Principal con split Train/Test
 # =====================================================
 if __name__ == "__main__":
-    results_dir = os.path.join("align combination", "resultados_finales")
+    results_dir = os.path.join("allign paralell", "resultados_finales")
     os.makedirs(results_dir, exist_ok=True)
 
     saliency_dir = os.path.join(results_dir, "saliency")
     os.makedirs(saliency_dir, exist_ok=True)
 
     # 4.1 Carga y preprocesado
-    X, y = load_data(base_dir="align combination/resultados")
+    X, y = load_data(base_dir="allign paralell/resultados")
     X = X[..., np.newaxis]
     num_clases = len(np.unique(y))
     input_length = X.shape[1]
