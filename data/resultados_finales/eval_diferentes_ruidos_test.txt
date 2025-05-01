@@ -1,6 +1,6 @@
 === Evaluación en Test con diferentes niveles de ruido ===
 
-Ruido=0.0 -> Loss: 0.0902 | Accuracy: 98.75%
+Ruido=0.0 -> Loss: 0.1147 | Accuracy: 98.75%
 Reporte de clasificación:
               precision    recall  f1-score   support
 
@@ -12,7 +12,7 @@ Reporte de clasificación:
 weighted avg       0.99      0.99      0.99       400
 
 
-Ruido=0.01 -> Loss: 0.0903 | Accuracy: 98.75%
+Ruido=0.01 -> Loss: 0.1149 | Accuracy: 98.75%
 Reporte de clasificación:
               precision    recall  f1-score   support
 
@@ -24,19 +24,7 @@ Reporte de clasificación:
 weighted avg       0.99      0.99      0.99       400
 
 
-Ruido=0.05 -> Loss: 0.1080 | Accuracy: 98.75%
-Reporte de clasificación:
-              precision    recall  f1-score   support
-
-           0       0.98      1.00      0.99       200
-           1       1.00      0.97      0.99       200
-
-    accuracy                           0.99       400
-   macro avg       0.99      0.99      0.99       400
-weighted avg       0.99      0.99      0.99       400
-
-
-Ruido=0.1 -> Loss: 0.1564 | Accuracy: 98.25%
+Ruido=0.05 -> Loss: 0.1334 | Accuracy: 98.25%
 Reporte de clasificación:
               precision    recall  f1-score   support
 
@@ -48,14 +36,26 @@ Reporte de clasificación:
 weighted avg       0.98      0.98      0.98       400
 
 
-Ruido=0.2 -> Loss: 0.8641 | Accuracy: 88.50%
+Ruido=0.1 -> Loss: 0.2005 | Accuracy: 97.75%
 Reporte de clasificación:
               precision    recall  f1-score   support
 
-           0       0.81      1.00      0.90       200
-           1       1.00      0.77      0.87       200
+           0       0.96      1.00      0.98       200
+           1       1.00      0.95      0.98       200
 
-    accuracy                           0.89       400
-   macro avg       0.91      0.89      0.88       400
-weighted avg       0.91      0.89      0.88       400
+    accuracy                           0.98       400
+   macro avg       0.98      0.98      0.98       400
+weighted avg       0.98      0.98      0.98       400
+
+
+Ruido=0.2 -> Loss: 1.1850 | Accuracy: 84.75%
+Reporte de clasificación:
+              precision    recall  f1-score   support
+
+           0       0.77      1.00      0.87       200
+           1       1.00      0.69      0.82       200
+
+    accuracy                           0.85       400
+   macro avg       0.88      0.85      0.84       400
+weighted avg       0.88      0.85      0.84       400
 

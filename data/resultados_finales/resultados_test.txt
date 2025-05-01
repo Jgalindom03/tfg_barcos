@@ -1,1 +1,1 @@
-Test -> Loss: 0.0902 | Accuracy: 98.75%
+Test -> Loss: 0.1147 | Accuracy: 98.75%
