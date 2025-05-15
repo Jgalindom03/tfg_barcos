@@ -1,135 +1,97 @@
-
 import os
-import numpy as np
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import h5py
 
-def cargar_y_formar_matriz(carpeta):
+def cargar_planos(resultados_root):
     """
-    Lee todos los CSV de la carpeta indicada y devuelve una matriz 3D:
-       (n_archivos, n_timesteps, n_canales)
-    Asume que cada CSV tiene filas=timesteps, columnas=canales, 
-    y descarta columna 'time' si existe.
+    Lee todos los CSV 'matriz_3D_aplanada_dataframe.csv' en
+    resultados_root/<clase>/ y devuelve un único DataFrame con
+    una columna 'clase'.
     """
-    archivos = sorted([
-        f for f in os.listdir(carpeta) 
-        if os.path.isfile(os.path.join(carpeta, f)) and f.lower().endswith(".csv")
-    ])
-    if not archivos:
-        raise ValueError(f"No hay archivos CSV en '{carpeta}'")
-    lista = []
-    for fn in archivos:
-        df = pd.read_csv(os.path.join(carpeta, fn))
-        if "time" in df.columns:
-            df = df.drop(columns=["time"])
-        lista.append(df.values)
-    shapes = {m.shape for m in lista}
-    if len(shapes) != 1:
-        raise ValueError(f"Formas distintas en los CSV de '{carpeta}': {shapes}")
-    matriz = np.stack(lista, axis=0)
-    print(f"  • Matriz 3D cargada de '{carpeta}' → shape {matriz.shape}")
-    return matriz
+    dfs = []
+    for clase in sorted(os.listdir(resultados_root)):
+        carpeta = os.path.join(resultados_root, clase)
+        ruta_csv = os.path.join(carpeta, "matriz_3D_aplanada_dataframe.csv")
+        if os.path.isfile(ruta_csv):
+            df = pd.read_csv(ruta_csv)
+            df["clase"] = clase
+            dfs.append(df)
+    if not dfs:
+        raise RuntimeError(f"No se encontró ningún CSV en {resultados_root}")
+    df_all = pd.concat(dfs, ignore_index=True)
+    print(f"Cargados {len(dfs)} clases → DataFrame con {df_all.shape[0]} filas y {df_all.shape[1]} columnas")
+    return df_all
 
-def eda_relations(matriz_3D, output_dir):
+def eda_comparativo(df_all, output_dir):
     """
-    1) Estadísticos descriptivos por canal
-    2) Histogramas y boxplots
-    3) Matriz de correlación + heatmap
-    4) Scatter (Ch1 vs Ch2)
-    5) Cross-correlation entre Ch1 y Ch2 de la muestra 0
+    Genera un EDA comparativo entre clases:
+      1) Estadísticos descriptivos por clase
+      2) Boxplots por canal+clase
+      3) Histograms facetados
+      4) Scatter Ch1 vs Ch2 coloreado por clase
+      5) Matrices de correlación por clase
     """
     os.makedirs(output_dir, exist_ok=True)
-    n_s, n_t, n_c = matriz_3D.shape
+    canales = [c for c in df_all.columns if c.startswith("Ch")]
 
-    # aplanar (n_s * n_t, n_c)
-    data = matriz_3D.reshape(-1, n_c)
-    cols = [f"Ch{i+1}" for i in range(n_c)]
-    df = pd.DataFrame(data, columns=cols)
+    # 1) Descriptivos por clase
+    stats = df_all.groupby("clase")[canales].describe().transpose()
+    stats.to_csv(os.path.join(output_dir, "descriptive_stats_por_clase.csv"))
+    print("  • Descriptivos por clase guardados")
 
-    # 1) Estadísticos descriptivos
-    stats = df.describe().transpose()
-    stats.to_csv(os.path.join(output_dir, "descriptive_stats_per_channel.csv"))
-    print("    – Estadísticos descriptivos guardados")
+    # 2) Boxplots por canal
+    for ch in canales:
+        plt.figure(figsize=(8,4))
+        sns.boxplot(x="clase", y=ch, data=df_all)
+        plt.title(f"Boxplot {ch} por clase")
+        plt.xticks(rotation=30)
+        plt.tight_layout()
+        fn = f"boxplot_{ch}_por_clase.png"
+        plt.savefig(os.path.join(output_dir, fn))
+        plt.close()
+    print("  • Boxplots por canal guardados")
 
-    # 2) Histogramas
-    df.hist(bins=30, figsize=(12, 8))
+    # 3) Histograms facetados (ejemplo con Ch1)
+    g = sns.FacetGrid(df_all, col="clase", col_wrap=3, sharex=False, sharey=False)
+    g.map(plt.hist, "Ch1", bins=30)
+    g.fig.suptitle("Histogramas de Ch1 por clase", y=1.02)
+    g.tight_layout()
+    g.savefig(os.path.join(output_dir, "histograms_Ch1_por_clase.png"))
+    plt.close()
+    print("  • Histograms facetados guardados")
+
+    # 4) Scatter Ch1 vs Ch2 coloreado por clase
+    sample = df_all.sample(n=min(5000, len(df_all)), random_state=0)
+    plt.figure(figsize=(6,6))
+    sns.scatterplot(x="Ch1", y="Ch2", hue="clase", data=sample, alpha=0.4)
+    plt.title("Ch1 vs Ch2 por clase")
+    plt.legend(bbox_to_anchor=(1,1))
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "histograms_channels.png"))
-    plt.close('all')
-    print("    – Histograms guardados")
+    plt.savefig(os.path.join(output_dir, "scatter_Ch1_Ch2_por_clase.png"))
+    plt.close()
+    print("  • Scatter Ch1 vs Ch2 guardado")
 
-    # 2.2) Boxplots
-    fig, ax = plt.subplots(figsize=(10, 6))
-    df.plot.box(ax=ax)
-    ax.set_title("Boxplot por canal")
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "boxplot_channels.png"))
-    plt.close(fig)
-    print("    – Boxplot guardado")
-
-    # 3) Matriz de correlación + heatmap
-    corr = df.corr()
-    corr.to_csv(os.path.join(output_dir, "correlation_matrix.csv"))
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", ax=ax)
-    ax.set_title("Heatmap de correlación entre canales")
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "corr_heatmap.png"))
-    plt.close(fig)
-    print("    – Heatmap de correlación guardado")
-
-    # 4) Scatter Ch1 vs Ch2 (muestra aleatoria)
-    sample = df.sample(n=min(2000, len(df)), random_state=42)
-    fig, ax = plt.subplots(figsize=(6, 6))
-    sns.scatterplot(x="Ch1", y="Ch2", data=sample, alpha=0.3, ax=ax)
-    ax.set_title("Scatter Ch1 vs Ch2")
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "scatter_Ch1_Ch2.png"))
-    plt.close(fig)
-    print("    – Scatter Ch1 vs Ch2 guardado")
-
-    # 5) Cross-correlation Ch1 vs Ch2 de la muestra 0
-    ts1 = matriz_3D[0, :, 0]
-    ts2 = matriz_3D[0, :, 1]
-    x1 = (ts1 - ts1.mean()) / ts1.std()
-    x2 = (ts2 - ts2.mean()) / ts2.std()
-    cc = np.correlate(x1, x2, mode="full")
-    lags = np.arange(-len(ts1) + 1, len(ts1))
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(lags, cc)
-    ax.set_xlim(-100, 100)
-    ax.set_xlabel("Lag")
-    ax.set_ylabel("Cross-correlation")
-    ax.set_title("Cross-correlation Ch1 vs Ch2 (muestra 0)")
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "cross_correlation_Ch1_Ch2.png"))
-    plt.close(fig)
-    print("    – Cross-correlation guardada")
+    # 5) Correlaciones por clase
+    for clase, grp in df_all.groupby("clase"):
+        corr = grp[canales].corr()
+        plt.figure(figsize=(6,5))
+        sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm")
+        plt.title(f"Correlación canales — {clase}")
+        plt.tight_layout()
+        fn = f"corr_heatmap_{clase.replace(' ', '_')}.png"
+        plt.savefig(os.path.join(output_dir, fn))
+        plt.close()
+    print("  • Correlaciones por clase guardadas")
 
 if __name__ == "__main__":
-    base_input      = "severidad_alta"
+    base_input      = "cavitation suction"
     resultados_root = os.path.join(base_input, "resultados")
-    skip = {"resultados", "resultados_finales"}
+    out_comparativo = os.path.join(resultados_root, "EDA_comparativo")
 
-    for clase in sorted(os.listdir(base_input)):
-        path_clase = os.path.join(base_input, clase)
-        if not os.path.isdir(path_clase) or clase in skip:
-            continue
+    # 1) Cargar todo
+    df_all = cargar_planos(resultados_root)
 
-        print(f"\nProcesando clase: {clase}")
-        # 1) Intentar leer HDF5 existente
-        h5_path = os.path.join(resultados_root, clase, "matriz_3D.h5")
-        if os.path.isfile(h5_path):
-            with h5py.File(h5_path, "r") as f:
-                matriz = f["matriz_3D"][()]
-            print(f"  • Cargada matriz 3D desde HDF5: {h5_path}")
-        else:
-            # 2) Si no existe, reconstruir desde CSV base
-            matriz = cargar_y_formar_matriz(path_clase)
-
-        # 3) Generar EDA en resultados/<clase>/eda/
-        out_eda = os.path.join(resultados_root, clase, "eda")
-        eda_relations(matriz, out_eda)
-
+    # 2) Hacer EDA comparativo
+    eda_comparativo(df_all, out_comparativo)
