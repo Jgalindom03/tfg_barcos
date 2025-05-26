@@ -52,7 +52,6 @@ def load_data(base_dir="cavitation suction/resultados"):
 
     X = np.concatenate(X_list, axis=0)
     y = np.concatenate(y_list, axis=0)
-
     print("Shape final de X:", X.shape)
     print("Shape final de y:", y.shape)
 
